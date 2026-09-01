@@ -63,7 +63,7 @@ function NavTab({
   return (
     <Link
       to={to}
-      activeOptions={{ exact }}
+      activeOptions={{ exact: Boolean(exact) }}
       activeProps={{ className: "bg-primary text-primary-foreground" }}
       inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
       className="rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap transition-colors"
