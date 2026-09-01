@@ -276,7 +276,7 @@ function ReportPage() {
               </QuestionCard>
 
               <QuestionCard step={6} label={t("q_next")} question={t("next_q")}>
-                <NumberStepper value={nextNeed} onChange={setNextNeed} step={50} />
+                <NumberStepper value={nextNeed} onChange={setNextNeed} />
               </QuestionCard>
             </div>
 
