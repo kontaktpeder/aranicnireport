@@ -9,3 +9,10 @@ export function normalizeUsername(username: string) {
 export function usernameToEmail(username: string) {
   return `${normalizeUsername(username)}@${USERNAME_EMAIL_DOMAIN}`;
 }
+
+// Admins may create accounts with a real email address instead of a username.
+// Accept both on sign-in: anything containing "@" is used verbatim.
+export function loginIdentifierToEmail(identifier: string) {
+  const value = identifier.trim();
+  return value.includes("@") ? value.toLowerCase() : usernameToEmail(value);
+}
