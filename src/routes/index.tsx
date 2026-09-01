@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
-import { usernameToEmail } from "@/lib/username";
+import { loginIdentifierToEmail } from "@/lib/username";
 import { LanguageToggle, Wordmark } from "@/components/brand";
 import { PrimaryButton, TextField } from "@/components/field";
 
@@ -59,7 +59,7 @@ function LoginPage() {
     }
     setBusy(true);
     const { data, error: signInError } = await supabase.auth.signInWithPassword({
-      email: usernameToEmail(username),
+      email: loginIdentifierToEmail(username),
       password,
     });
     if (signInError || !data.session) {
