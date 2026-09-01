@@ -220,7 +220,15 @@ function CustomerDetail() {
   );
 }
 
-function Info({ label, value, detail }: { label: string; value: string; detail?: string }) {
+function Info({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail?: string | undefined;
+}) {
   return (
     <div className="surface-card p-4">
       <p className="eyebrow">{label}</p>
