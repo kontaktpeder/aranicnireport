@@ -1,24 +1,124 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useI18n } from "@/lib/i18n";
+import { usernameToEmail } from "@/lib/username";
+import { LanguageToggle, Wordmark } from "@/components/brand";
+import { PrimaryButton, TextField } from "@/components/field";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
-  component: Index,
+  head: () => ({
+    meta: [
+      { title: "Sign in — Gold of Sicily Partner Portal" },
+      {
+        name: "description",
+        content:
+          "Partner sign-in for Gold of Sicily: submit your shift report in under 60 seconds.",
+      },
+      { property: "og:title", content: "Sign in — Gold of Sicily Partner Portal" },
+      {
+        property: "og:description",
+        content: "Partner sign-in for Gold of Sicily shift reporting.",
+      },
+    ],
+  }),
+  component: LoginPage,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
-function Index() {
+function LoginPage() {
+  const { t, lang } = useI18n();
+  const navigate = useNavigate();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (cancelled || !data.session) return;
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", data.session.user.id);
+      const isAdmin = (roles ?? []).some((r) => r.role === "admin");
+      void navigate({ to: isAdmin ? "/admin" : "/report", replace: true });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    setError(null);
+    if (!username.trim() || !password) {
+      setError(t("login_missing"));
+      return;
+    }
+    setBusy(true);
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      email: usernameToEmail(username),
+      password,
+    });
+    if (signInError || !data.session) {
+      setBusy(false);
+      setError(t("login_failed"));
+      return;
+    }
+    const { data: roles } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", data.session.user.id);
+    const isAdmin = (roles ?? []).some((r) => r.role === "admin");
+    void navigate({ to: isAdmin ? "/admin" : "/report", replace: true });
+  }
+
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
+    <main className="flex min-h-screen flex-col px-6 pt-10 pb-12 sm:justify-center">
+      <div className="mx-auto w-full max-w-sm">
+        <div className="flex items-center justify-between">
+          <Wordmark size="sm" />
+          <LanguageToggle />
+        </div>
+
+        <div className="mt-14 text-center">
+          <p className="eyebrow">{t("login_sub")}</p>
+          <h1 className="mt-3 text-4xl leading-tight font-semibold">
+            {lang === "no" ? "Velkommen" : "Welcome"}
+          </h1>
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-10 space-y-4">
+          <TextField
+            label={t("username")}
+            value={username}
+            onChange={setUsername}
+            placeholder="oslobar"
+          />
+          <TextField
+            label={t("password")}
+            value={password}
+            onChange={setPassword}
+            type="password"
+          />
+          {error ? (
+            <p className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {error}
+            </p>
+          ) : null}
+          <PrimaryButton type="submit" disabled={busy} className="mt-2">
+            {busy ? t("signing_in") : t("sign_in")}
+          </PrimaryButton>
+        </form>
+
+        <p className="mt-10 text-center text-xs text-muted-foreground">
+          <Link to="/setup" className="underline decoration-primary/60 underline-offset-4">
+            Gold of Sicily
+          </Link>
+        </p>
+      </div>
+    </main>
   );
 }
