@@ -1,4 +1,3 @@
-import { Minus, Plus } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
@@ -73,15 +72,24 @@ export function NumberStepper({
   autoFocus?: boolean;
 }) {
   const numeric = value === "" ? 0 : value;
+  const smallStep = 1;
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2">
       <button
         type="button"
-        aria-label="minus"
+        aria-label={`minus ${step}`}
         onClick={() => onChange(Math.max(0, numeric - step))}
-        className="flex size-14 shrink-0 items-center justify-center rounded-2xl border-2 border-border bg-card transition-colors hover:border-primary/60 active:scale-95"
+        className="flex h-14 flex-1 min-w-10 items-center justify-center rounded-2xl border-2 border-border bg-card text-base font-bold transition-colors hover:border-primary/60 active:scale-95"
       >
-        <Minus className="size-5" />
+        -{step}
+      </button>
+      <button
+        type="button"
+        aria-label="minus one"
+        onClick={() => onChange(Math.max(0, numeric - smallStep))}
+        className="flex h-14 flex-1 min-w-10 items-center justify-center rounded-2xl border-2 border-border bg-card text-base font-bold transition-colors hover:border-primary/60 active:scale-95"
+      >
+        -1
       </button>
       <input
         type="number"
@@ -93,15 +101,23 @@ export function NumberStepper({
           const raw = event.target.value;
           onChange(raw === "" ? "" : Math.max(0, Number.parseInt(raw, 10) || 0));
         }}
-        className="h-16 min-w-0 flex-1 rounded-2xl border-2 border-border bg-card text-center text-3xl font-bold tabular-nums outline-none focus:border-primary"
+        className="h-16 min-w-0 flex-[1.5] rounded-2xl border-2 border-border bg-card text-center text-2xl font-bold tabular-nums outline-none focus:border-primary"
       />
       <button
         type="button"
-        aria-label="plus"
-        onClick={() => onChange(numeric + step)}
-        className="flex size-14 shrink-0 items-center justify-center rounded-2xl border-2 border-border bg-card transition-colors hover:border-primary/60 active:scale-95"
+        aria-label="plus one"
+        onClick={() => onChange(numeric + smallStep)}
+        className="flex h-14 flex-1 min-w-10 items-center justify-center rounded-2xl border-2 border-border bg-card text-base font-bold transition-colors hover:border-primary/60 active:scale-95"
       >
-        <Plus className="size-5" />
+        +1
+      </button>
+      <button
+        type="button"
+        aria-label={`plus ${step}`}
+        onClick={() => onChange(numeric + step)}
+        className="flex h-14 flex-1 min-w-10 items-center justify-center rounded-2xl border-2 border-border bg-card text-base font-bold transition-colors hover:border-primary/60 active:scale-95"
+      >
+        +{step}
       </button>
     </div>
   );
