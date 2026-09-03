@@ -59,8 +59,7 @@ function ReportPage() {
   const [prepIssue, setPrepIssue] = useState<boolean | null>(null);
   const [prepText, setPrepText] = useState("");
   const [nextNeed, setNextNeed] = useState<number | "">(0);
-  const [lines, setLines] = useState<ReportFlavorLine[]>([]);
-  const [linesReady, setLinesReady] = useState(false);
+  const [lineOverride, setLineOverride] = useState<ReportFlavorLine[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +93,11 @@ function ReportPage() {
     },
   });
 
-  const { data: catalog } = useQuery({
+  const {
+    data: catalog,
+    isPending: catalogPending,
+    isError: catalogError,
+  } = useQuery({
     queryKey: ["report-flavors", customerId],
     enabled: Boolean(customerId),
     queryFn: async () => {
@@ -111,24 +114,23 @@ function ReportPage() {
           .eq("available", true)
           .order("sort_order"),
       ]);
+      const products = (productsRes.data ?? []) as CatalogProduct[];
+      const menuIds = (menuRes.data ?? []).map((item) => item.product_id);
       return {
-        products: (productsRes.data ?? []) as CatalogProduct[],
-        menuIds: (menuRes.data ?? []).map((item) => item.product_id),
+        products,
+        menuIds,
+        lines: initialFlavorLines(products, menuIds),
       };
     },
   });
 
-  useEffect(() => {
-    if (!catalog || linesReady) return;
-    setLines(initialFlavorLines(catalog.products, catalog.menuIds));
-    setLinesReady(true);
-  }, [catalog, linesReady]);
-
-  const useFlavors = (catalog?.products.length ?? 0) > 0;
+  const lines = lineOverride ?? catalog?.lines ?? [];
+  const useFlavors = !catalogError && (catalog?.products.length ?? 0) > 0;
+  const perFlavor = catalogPending || useFlavors;
   const totals = sumLines(lines);
 
   async function submit() {
-    if (!customerId || !info?.session) return;
+    if (!customerId || !info?.session || catalogPending) return;
     if (useFlavors && lines.length === 0) {
       setError(t("no_flavors_on_report"));
       return;
@@ -188,7 +190,7 @@ function ReportPage() {
     setPrepIssue(null);
     setPrepText("");
     setNextNeed(0);
-    if (catalog) setLines(initialFlavorLines(catalog.products, catalog.menuIds));
+    setLineOverride(null);
     setDone(false);
     setError(null);
   }
@@ -299,13 +301,17 @@ function ReportPage() {
                 )}
               </QuestionCard>
 
-              {useFlavors ? (
+              {catalogPending ? (
+                <QuestionCard step={2} label={t("q_flavors")} question={t("flavors_q")}>
+                  <Clock className="size-5 animate-pulse text-muted-foreground" />
+                </QuestionCard>
+              ) : useFlavors ? (
                 <QuestionCard step={2} label={t("q_flavors")} question={t("flavors_q")}>
                   <p className="mb-4 text-sm text-muted-foreground">{t("flavors_hint")}</p>
                   <FlavorReportEditor
                     lines={lines}
                     catalog={catalog?.products ?? []}
-                    onChange={setLines}
+                    onChange={setLineOverride}
                   />
                   {lines.length > 0 ? (
                     <div className="mt-4">
@@ -329,7 +335,7 @@ function ReportPage() {
               )}
 
               <QuestionCard
-                step={useFlavors ? 3 : 4}
+                step={perFlavor ? 3 : 4}
                 label={t("q_feedback")}
                 question={t("feedback_q")}
               >
@@ -351,7 +357,7 @@ function ReportPage() {
                 </div>
               </QuestionCard>
 
-              <QuestionCard step={useFlavors ? 4 : 5} label={t("q_prep")} question={t("prep_q")}>
+              <QuestionCard step={perFlavor ? 4 : 5} label={t("q_prep")} question={t("prep_q")}>
                 <BigChoice<boolean>
                   options={[
                     { value: true, label: t("yes") },
@@ -368,7 +374,7 @@ function ReportPage() {
                 ) : null}
               </QuestionCard>
 
-              {useFlavors ? null : (
+              {perFlavor ? null : (
                 <QuestionCard step={6} label={t("q_next")} question={t("next_q")}>
                   <NumberStepper value={nextNeed} onChange={setNextNeed} />
                 </QuestionCard>
@@ -382,7 +388,7 @@ function ReportPage() {
             ) : null}
 
             <div className="mt-6">
-              <PrimaryButton onClick={submit} disabled={busy}>
+              <PrimaryButton onClick={submit} disabled={busy || catalogPending}>
                 {busy ? t("submitting") : t("submit")}
               </PrimaryButton>
             </div>
