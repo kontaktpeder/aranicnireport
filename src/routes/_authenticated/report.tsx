@@ -125,7 +125,7 @@ function ReportPage() {
     setDone(false);
   }
 
-  if (isLoading) {
+  if (isLoading || !info) {
     return (
       <main className="flex min-h-screen items-center justify-center">
         <Clock className="size-5 animate-pulse text-muted-foreground" />
