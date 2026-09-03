@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { usernameToEmail, normalizeUsername, USERNAME_PATTERN } from "@/lib/username";
+import { usernameToEmail, normalizeUsername, isValidUsername } from "@/lib/username";
 
 const createSchema = z.object({
   name: z.string().trim().min(1),
@@ -11,7 +11,7 @@ const createSchema = z.object({
     .trim()
     .min(3)
     .transform(normalizeUsername)
-    .refine((value) => USERNAME_PATTERN.test(value), {
+    .refine((value) => isValidUsername(value), {
       message: "Username can only contain letters, numbers, dots, hyphens and underscores (min 3).",
     }),
   password: z.string().min(6),
