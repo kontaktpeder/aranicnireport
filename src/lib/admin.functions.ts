@@ -46,7 +46,7 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
       email: usernameToEmail(username),
       password: data.password,
       email_confirm: true,
-      user_metadata: { username },
+      user_metadata: { username, preferred_language: data.language },
     });
     if (userError || !created.user) {
       await supabaseAdmin.from("customers").delete().eq("id", customer.id);
@@ -54,22 +54,33 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
     }
 
     const userId = created.user.id;
-    const { error: profileError } = await supabaseAdmin.from("profiles").insert({
-      id: userId,
-      username,
-      customer_id: customer.id,
-      preferred_language: data.language,
-    });
-    if (profileError) {
+    async function rollbackLogin() {
       await supabaseAdmin.auth.admin.deleteUser(userId);
       await supabaseAdmin.from("customers").delete().eq("id", customer.id);
+    }
+
+    // Trigger may already have inserted the profile; upsert links it to the customer.
+    const { error: profileError } = await supabaseAdmin.from("profiles").upsert(
+      {
+        id: userId,
+        username,
+        customer_id: customer.id,
+        preferred_language: data.language,
+      },
+      { onConflict: "id" },
+    );
+    if (profileError) {
+      await rollbackLogin();
       throw new Error(profileError.message);
     }
 
     const { error: roleError } = await supabaseAdmin
       .from("user_roles")
       .insert({ user_id: userId, role: "customer" });
-    if (roleError) throw new Error(roleError.message);
+    if (roleError) {
+      await rollbackLogin();
+      throw new Error(roleError.message);
+    }
 
     return { customerId: customer.id, userId };
   });
@@ -115,11 +126,21 @@ export const bootstrapFirstAdmin = createServerFn({ method: "POST" })
     });
     if (userError || !created.user) throw new Error(userError?.message ?? "Could not create admin");
 
-    await supabaseAdmin.from("profiles").insert({ id: created.user.id, username });
+    const { error: profileError } = await supabaseAdmin.from("profiles").upsert(
+      { id: created.user.id, username },
+      { onConflict: "id" },
+    );
+    if (profileError) {
+      await supabaseAdmin.auth.admin.deleteUser(created.user.id);
+      throw new Error(profileError.message);
+    }
     const { error: roleError } = await supabaseAdmin
       .from("user_roles")
       .insert({ user_id: created.user.id, role: "admin" });
-    if (roleError) throw new Error(roleError.message);
+    if (roleError) {
+      await supabaseAdmin.auth.admin.deleteUser(created.user.id);
+      throw new Error(roleError.message);
+    }
     return { ok: true };
   });
 
