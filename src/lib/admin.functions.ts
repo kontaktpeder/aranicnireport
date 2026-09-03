@@ -40,7 +40,10 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
       })
       .select("id")
       .single();
-    if (customerError || !customer) throw new Error(customerError?.message ?? "Could not create customer");
+    if (customerError || !customer)
+      throw new Error(customerError?.message ?? "Could not create customer");
+
+    const customerId = customer.id;
 
     const { data: created, error: userError } = await supabaseAdmin.auth.admin.createUser({
       email: usernameToEmail(username),
@@ -49,14 +52,14 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
       user_metadata: { username, preferred_language: data.language },
     });
     if (userError || !created.user) {
-      await supabaseAdmin.from("customers").delete().eq("id", customer.id);
+      await supabaseAdmin.from("customers").delete().eq("id", customerId);
       throw new Error(userError?.message ?? "Could not create login");
     }
 
     const userId = created.user.id;
     async function rollbackLogin() {
       await supabaseAdmin.auth.admin.deleteUser(userId);
-      await supabaseAdmin.from("customers").delete().eq("id", customer.id);
+      await supabaseAdmin.from("customers").delete().eq("id", customerId);
     }
 
     // Trigger may already have inserted the profile; upsert links it to the customer.
@@ -64,7 +67,7 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
       {
         id: userId,
         username,
-        customer_id: customer.id,
+        customer_id: customerId,
         preferred_language: data.language,
       },
       { onConflict: "id" },
@@ -82,7 +85,7 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
       throw new Error(roleError.message);
     }
 
-    return { customerId: customer.id, userId };
+    return { customerId, userId };
   });
 
 export const resetCustomerPassword = createServerFn({ method: "POST" })
@@ -126,10 +129,9 @@ export const bootstrapFirstAdmin = createServerFn({ method: "POST" })
     });
     if (userError || !created.user) throw new Error(userError?.message ?? "Could not create admin");
 
-    const { error: profileError } = await supabaseAdmin.from("profiles").upsert(
-      { id: created.user.id, username },
-      { onConflict: "id" },
-    );
+    const { error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .upsert({ id: created.user.id, username }, { onConflict: "id" });
     if (profileError) {
       await supabaseAdmin.auth.admin.deleteUser(created.user.id);
       throw new Error(profileError.message);
