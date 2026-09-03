@@ -332,6 +332,51 @@ export type Database = {
           },
         ]
       }
+      shift_report_lines: {
+        Row: {
+          created_at: string
+          id: string
+          next_required_quantity: number | null
+          product_id: string
+          remaining_stock: number
+          shift_report_id: string
+          sold: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          next_required_quantity?: number | null
+          product_id: string
+          remaining_stock?: number
+          shift_report_id: string
+          sold?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          next_required_quantity?: number | null
+          product_id?: string
+          remaining_stock?: number
+          shift_report_id?: string
+          sold?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shift_report_lines_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shift_report_lines_shift_report_id_fkey"
+            columns: ["shift_report_id"]
+            isOneToOne: false
+            referencedRelation: "shift_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venue_menu_items: {
         Row: {
           available: boolean
@@ -425,6 +470,22 @@ export type Database = {
       }
       is_admin: { Args: never; Returns: boolean }
       slugify_name: { Args: { input: string }; Returns: string }
+      submit_shift_report: {
+        Args: {
+          p_actual_quantity_received?: number | null
+          p_customer_id: string
+          p_delivery_correct?: boolean | null
+          p_delivery_id?: string | null
+          p_guest_feedback_rating?:
+            | Database["public"]["Enums"]["feedback_rating"]
+            | null
+          p_guest_feedback_text?: string | null
+          p_lines?: Json
+          p_preparation_issue?: boolean
+          p_preparation_issue_text?: string | null
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "admin" | "customer"

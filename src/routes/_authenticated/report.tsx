@@ -14,6 +14,14 @@ import {
   QuestionCard,
   TextAreaField,
 } from "@/components/field";
+import { FlavorReportEditor, FlavorTotals } from "@/components/flavor-lines";
+import {
+  initialFlavorLines,
+  linesPayload,
+  sumLines,
+  type CatalogProduct,
+  type ReportFlavorLine,
+} from "@/lib/flavors";
 
 export const Route = createFileRoute("/_authenticated/report")({
   head: () => ({
@@ -22,12 +30,12 @@ export const Route = createFileRoute("/_authenticated/report")({
       {
         name: "description",
         content:
-          "Report your shift: delivery, sales, remaining stock, guest feedback and your next requirement.",
+          "Report your shift: delivery, sales per flavor, remaining stock, guest feedback and your next requirement.",
       },
       { property: "og:title", content: "60 second shift report — Gold of Sicily" },
       {
         property: "og:description",
-        content: "Report delivery, sales, stock, guest feedback and next requirement.",
+        content: "Report delivery, sales per flavor, stock, guest feedback and next requirement.",
       },
     ],
   }),
@@ -51,6 +59,8 @@ function ReportPage() {
   const [prepIssue, setPrepIssue] = useState<boolean | null>(null);
   const [prepText, setPrepText] = useState("");
   const [nextNeed, setNextNeed] = useState<number | "">(0);
+  const [lines, setLines] = useState<ReportFlavorLine[]>([]);
+  const [linesReady, setLinesReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,25 +94,81 @@ function ReportPage() {
     },
   });
 
+  const { data: catalog } = useQuery({
+    queryKey: ["report-flavors", customerId],
+    enabled: Boolean(customerId),
+    queryFn: async () => {
+      const [productsRes, menuRes] = await Promise.all([
+        supabase
+          .from("products")
+          .select("id, name_no, name_en, slug")
+          .eq("active", true)
+          .order("sort_order"),
+        supabase
+          .from("venue_menu_items")
+          .select("product_id, available, sort_order")
+          .eq("customer_id", customerId!)
+          .eq("available", true)
+          .order("sort_order"),
+      ]);
+      return {
+        products: (productsRes.data ?? []) as CatalogProduct[],
+        menuIds: (menuRes.data ?? []).map((item) => item.product_id),
+      };
+    },
+  });
+
+  useEffect(() => {
+    if (!catalog || linesReady) return;
+    setLines(initialFlavorLines(catalog.products, catalog.menuIds));
+    setLinesReady(true);
+  }, [catalog, linesReady]);
+
+  const useFlavors = (catalog?.products.length ?? 0) > 0;
+  const totals = sumLines(lines);
+
   async function submit() {
     if (!customerId || !info?.session) return;
+    if (useFlavors && lines.length === 0) {
+      setError(t("no_flavors_on_report"));
+      return;
+    }
     setBusy(true);
     setError(null);
-    const { error: insertError } = await supabase.from("shift_reports").insert({
+
+    const shared = {
       customer_id: customerId,
       submitted_by: info.session.user.id,
       delivery_id: delivery?.id ?? null,
       delivery_correct: deliveryCorrect,
       actual_quantity_received:
         deliveryCorrect === false && actualReceived !== "" ? actualReceived : null,
-      sold_this_shift: sold === "" ? 0 : sold,
-      remaining_stock: remaining === "" ? 0 : remaining,
       guest_feedback_rating: feedback,
       guest_feedback_text: feedbackText.trim() || null,
       preparation_issue: prepIssue === true,
       preparation_issue_text: prepIssue === true && prepText.trim() ? prepText.trim() : null,
-      next_required_quantity: nextNeed === "" ? null : nextNeed,
-    });
+    };
+
+    const { error: insertError } = useFlavors
+      ? await supabase.rpc("submit_shift_report", {
+          p_customer_id: customerId,
+          p_delivery_id: delivery?.id ?? null,
+          p_delivery_correct: deliveryCorrect,
+          p_actual_quantity_received:
+            deliveryCorrect === false && actualReceived !== "" ? actualReceived : null,
+          p_guest_feedback_rating: feedback,
+          p_guest_feedback_text: feedbackText.trim() || null,
+          p_preparation_issue: prepIssue === true,
+          p_preparation_issue_text: prepIssue === true && prepText.trim() ? prepText.trim() : null,
+          p_lines: linesPayload(lines),
+        })
+      : await supabase.from("shift_reports").insert({
+          ...shared,
+          sold_this_shift: sold === "" ? 0 : sold,
+          remaining_stock: remaining === "" ? 0 : remaining,
+          next_required_quantity: nextNeed === "" ? null : nextNeed,
+        });
+
     setBusy(false);
     if (insertError) {
       setError(t("submit_error"));
@@ -122,7 +188,9 @@ function ReportPage() {
     setPrepIssue(null);
     setPrepText("");
     setNextNeed(0);
+    if (catalog) setLines(initialFlavorLines(catalog.products, catalog.menuIds));
     setDone(false);
+    setError(null);
   }
 
   if (isLoading || !info) {
@@ -231,15 +299,40 @@ function ReportPage() {
                 )}
               </QuestionCard>
 
-              <QuestionCard step={2} label={t("q_sales")} question={t("sold_q")}>
-                <NumberStepper value={sold} onChange={setSold} step={10} />
-              </QuestionCard>
+              {useFlavors ? (
+                <QuestionCard step={2} label={t("q_flavors")} question={t("flavors_q")}>
+                  <p className="mb-4 text-sm text-muted-foreground">{t("flavors_hint")}</p>
+                  <FlavorReportEditor
+                    lines={lines}
+                    catalog={catalog?.products ?? []}
+                    onChange={setLines}
+                  />
+                  {lines.length > 0 ? (
+                    <div className="mt-4">
+                      <FlavorTotals
+                        sold={totals.sold}
+                        remaining={totals.remaining}
+                        nextNeed={totals.nextNeed}
+                      />
+                    </div>
+                  ) : null}
+                </QuestionCard>
+              ) : (
+                <>
+                  <QuestionCard step={2} label={t("q_sales")} question={t("sold_q")}>
+                    <NumberStepper value={sold} onChange={setSold} step={10} />
+                  </QuestionCard>
+                  <QuestionCard step={3} label={t("q_stock")} question={t("stock_q")}>
+                    <NumberStepper value={remaining} onChange={setRemaining} step={10} />
+                  </QuestionCard>
+                </>
+              )}
 
-              <QuestionCard step={3} label={t("q_stock")} question={t("stock_q")}>
-                <NumberStepper value={remaining} onChange={setRemaining} step={10} />
-              </QuestionCard>
-
-              <QuestionCard step={4} label={t("q_feedback")} question={t("feedback_q")}>
+              <QuestionCard
+                step={useFlavors ? 3 : 4}
+                label={t("q_feedback")}
+                question={t("feedback_q")}
+              >
                 <BigChoice<Feedback>
                   options={[
                     { value: "positive", label: t("positive") },
@@ -258,7 +351,7 @@ function ReportPage() {
                 </div>
               </QuestionCard>
 
-              <QuestionCard step={5} label={t("q_prep")} question={t("prep_q")}>
+              <QuestionCard step={useFlavors ? 4 : 5} label={t("q_prep")} question={t("prep_q")}>
                 <BigChoice<boolean>
                   options={[
                     { value: true, label: t("yes") },
@@ -275,9 +368,11 @@ function ReportPage() {
                 ) : null}
               </QuestionCard>
 
-              <QuestionCard step={6} label={t("q_next")} question={t("next_q")}>
-                <NumberStepper value={nextNeed} onChange={setNextNeed} />
-              </QuestionCard>
+              {useFlavors ? null : (
+                <QuestionCard step={6} label={t("q_next")} question={t("next_q")}>
+                  <NumberStepper value={nextNeed} onChange={setNextNeed} />
+                </QuestionCard>
+              )}
             </div>
 
             {error ? (
