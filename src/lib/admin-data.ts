@@ -6,7 +6,11 @@ export type CustomerRow = {
   id: string;
   name: string;
   location: string | null;
+  city: string | null;
   active: boolean;
+  partnerId: string | null;
+  publicVisible: boolean;
+  createdAt: string;
   lastReportAt: string | null;
   soldThisWeek: number;
   currentStock: number;
@@ -15,6 +19,16 @@ export type CustomerRow = {
   prepIssue: boolean;
   needsReview: boolean;
   status: "green" | "orange" | "red";
+};
+
+export type PartnerOverview = {
+  id: string;
+  name: string;
+  kind: "distributor" | "direct";
+  active: boolean;
+  venueCount: number;
+  distributedThisMonth: number;
+  venues: CustomerRow[];
 };
 
 export function startOfWeek() {
@@ -26,12 +40,25 @@ export function startOfWeek() {
   return monday.toISOString();
 }
 
+export function startOfMonth() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+}
+
+export function daysAgoIso(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString();
+}
+
 export function useAdminOverview() {
   return useQuery({
     queryKey: ["admin-overview"],
     queryFn: async () => {
       const weekStart = startOfWeek();
-      const [customersRes, reportsRes, deliveriesRes] = await Promise.all([
+      const monthStart = startOfMonth();
+      const recentCutoff = daysAgoIso(30);
+      const [customersRes, reportsRes, deliveriesRes, partnersRes] = await Promise.all([
         supabase.from("customers").select("*").order("name"),
         supabase
           .from("shift_reports")
@@ -43,13 +70,16 @@ export function useAdminOverview() {
           .select("*")
           .order("delivered_at", { ascending: false })
           .limit(1000),
+        supabase.from("partners").select("*").order("name"),
       ]);
 
       if (customersRes.error) throw customersRes.error;
+      if (partnersRes.error) throw partnersRes.error;
 
       const customers = customersRes.data ?? [];
       const reports = reportsRes.data ?? [];
       const deliveries = deliveriesRes.data ?? [];
+      const partners = partnersRes.data ?? [];
 
       const rows: CustomerRow[] = customers.map((customer) => {
         const own = reports.filter((r) => r.customer_id === customer.id);
@@ -72,19 +102,18 @@ export function useAdminOverview() {
 
         let status: CustomerRow["status"] = "green";
         if (!latest || age > 10) status = "red";
-        else if (
-          age > 6 ||
-          latest.preparation_issue ||
-          latest.needs_review ||
-          estimatedStock <= 20
-        )
+        else if (age > 6 || latest.preparation_issue || latest.needs_review || estimatedStock <= 20)
           status = "orange";
 
         return {
           id: customer.id,
           name: customer.name,
           location: customer.location,
+          city: customer.city,
           active: customer.active,
+          partnerId: customer.partner_id,
+          publicVisible: customer.public_visible,
+          createdAt: customer.created_at,
           lastReportAt: latest?.created_at ?? null,
           soldThisWeek,
           currentStock,
@@ -97,13 +126,39 @@ export function useAdminOverview() {
       });
 
       const active = rows.filter((row) => row.active);
+      const partnerOverviews: PartnerOverview[] = partners.map((partner) => {
+        const venues = rows.filter((row) => row.partnerId === partner.id);
+        const venueIds = new Set(venues.map((venue) => venue.id));
+        const distributedThisMonth = deliveries
+          .filter(
+            (delivery) => venueIds.has(delivery.customer_id) && delivery.delivered_at >= monthStart,
+          )
+          .reduce((sum, delivery) => sum + delivery.quantity, 0);
+        return {
+          id: partner.id,
+          name: partner.name,
+          kind: partner.kind,
+          active: partner.active,
+          venueCount: venues.filter((venue) => venue.active).length,
+          distributedThisMonth,
+          venues,
+        };
+      });
+      const unassigned = rows.filter((row) => !row.partnerId);
+
       return {
         rows,
+        partners: partnerOverviews,
+        unassigned,
         metrics: {
           soldThisWeek: active.reduce((sum, row) => sum + row.soldThisWeek, 0),
           currentStock: active.reduce((sum, row) => sum + row.estimatedStock, 0),
           requestedNext: active.reduce((sum, row) => sum + (row.nextRequirement ?? 0), 0),
           awaiting: active.filter((row) => row.status !== "green").length,
+          activePartners: partners.filter((partner) => partner.active).length,
+          activeVenues: active.length,
+          qualityIssues: active.filter((row) => row.prepIssue || row.needsReview).length,
+          newVenues: active.filter((row) => row.createdAt >= recentCutoff).length,
         },
       };
     },

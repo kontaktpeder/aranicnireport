@@ -17,9 +17,14 @@ import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedReportRouteImport } from './routes/_authenticated/report'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
 import { Route as AuthenticatedAdminDeliveriesRouteImport } from './routes/_authenticated/admin.deliveries'
+import { Route as AuthenticatedAdminProductsRouteImport } from './routes/_authenticated/admin.products'
 import { Route as AuthenticatedAdminReportsRouteImport } from './routes/_authenticated/admin.reports'
 import { Route as AuthenticatedAdminCustomersIndexRouteImport } from './routes/_authenticated/admin.customers.index'
 import { Route as AuthenticatedAdminCustomersCustomerIdRouteImport } from './routes/_authenticated/admin.customers.$customerId'
+import { Route as AuthenticatedAdminPartnersIndexRouteImport } from './routes/_authenticated/admin.partners.index'
+import { Route as AuthenticatedAdminPartnersPartnerIdRouteImport } from './routes/_authenticated/admin.partners.$partnerId'
+import { Route as ApiPublicV1VenuesRouteImport } from './routes/api/public/v1/venues'
+import { Route as ApiPublicV1VenuesSlugRouteImport } from './routes/api/public/v1/venues.$slug'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -61,6 +66,12 @@ const AuthenticatedAdminDeliveriesRoute =
     path: '/deliveries',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminProductsRoute =
+  AuthenticatedAdminProductsRouteImport.update({
+    id: '/products',
+    path: '/products',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminReportsRoute =
   AuthenticatedAdminReportsRouteImport.update({
     id: '/reports',
@@ -79,6 +90,28 @@ const AuthenticatedAdminCustomersCustomerIdRoute =
     path: '/customers/$customerId',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminPartnersIndexRoute =
+  AuthenticatedAdminPartnersIndexRouteImport.update({
+    id: '/partners/',
+    path: '/partners/',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminPartnersPartnerIdRoute =
+  AuthenticatedAdminPartnersPartnerIdRouteImport.update({
+    id: '/partners/$partnerId',
+    path: '/partners/$partnerId',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const ApiPublicV1VenuesRoute = ApiPublicV1VenuesRouteImport.update({
+  id: '/api/public/v1/venues',
+  path: '/api/public/v1/venues',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicV1VenuesSlugRoute = ApiPublicV1VenuesSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => ApiPublicV1VenuesRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -87,10 +120,15 @@ export interface FileRoutesByFullPath {
   '/history': typeof AuthenticatedHistoryRoute
   '/report': typeof AuthenticatedReportRoute
   '/admin/deliveries': typeof AuthenticatedAdminDeliveriesRoute
+  '/admin/products': typeof AuthenticatedAdminProductsRoute
   '/admin/reports': typeof AuthenticatedAdminReportsRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/admin/customers/$customerId': typeof AuthenticatedAdminCustomersCustomerIdRoute
+  '/admin/partners/$partnerId': typeof AuthenticatedAdminPartnersPartnerIdRoute
+  '/api/public/v1/venues': typeof ApiPublicV1VenuesRouteWithChildren
   '/admin/customers/': typeof AuthenticatedAdminCustomersIndexRoute
+  '/admin/partners/': typeof AuthenticatedAdminPartnersIndexRoute
+  '/api/public/v1/venues/$slug': typeof ApiPublicV1VenuesSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -98,10 +136,15 @@ export interface FileRoutesByTo {
   '/history': typeof AuthenticatedHistoryRoute
   '/report': typeof AuthenticatedReportRoute
   '/admin/deliveries': typeof AuthenticatedAdminDeliveriesRoute
+  '/admin/products': typeof AuthenticatedAdminProductsRoute
   '/admin/reports': typeof AuthenticatedAdminReportsRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/admin/customers/$customerId': typeof AuthenticatedAdminCustomersCustomerIdRoute
+  '/admin/partners/$partnerId': typeof AuthenticatedAdminPartnersPartnerIdRoute
+  '/api/public/v1/venues': typeof ApiPublicV1VenuesRouteWithChildren
   '/admin/customers': typeof AuthenticatedAdminCustomersIndexRoute
+  '/admin/partners': typeof AuthenticatedAdminPartnersIndexRoute
+  '/api/public/v1/venues/$slug': typeof ApiPublicV1VenuesSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -112,10 +155,15 @@ export interface FileRoutesById {
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
   '/_authenticated/report': typeof AuthenticatedReportRoute
   '/_authenticated/admin/deliveries': typeof AuthenticatedAdminDeliveriesRoute
+  '/_authenticated/admin/products': typeof AuthenticatedAdminProductsRoute
   '/_authenticated/admin/reports': typeof AuthenticatedAdminReportsRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/admin/customers/$customerId': typeof AuthenticatedAdminCustomersCustomerIdRoute
+  '/_authenticated/admin/partners/$partnerId': typeof AuthenticatedAdminPartnersPartnerIdRoute
+  '/api/public/v1/venues': typeof ApiPublicV1VenuesRouteWithChildren
   '/_authenticated/admin/customers/': typeof AuthenticatedAdminCustomersIndexRoute
+  '/_authenticated/admin/partners/': typeof AuthenticatedAdminPartnersIndexRoute
+  '/api/public/v1/venues/$slug': typeof ApiPublicV1VenuesSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -126,10 +174,15 @@ export interface FileRouteTypes {
     | '/history'
     | '/report'
     | '/admin/deliveries'
+    | '/admin/products'
     | '/admin/reports'
     | '/admin/'
     | '/admin/customers/$customerId'
+    | '/admin/partners/$partnerId'
+    | '/api/public/v1/venues'
     | '/admin/customers/'
+    | '/admin/partners/'
+    | '/api/public/v1/venues/$slug'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -137,10 +190,15 @@ export interface FileRouteTypes {
     | '/history'
     | '/report'
     | '/admin/deliveries'
+    | '/admin/products'
     | '/admin/reports'
     | '/admin'
     | '/admin/customers/$customerId'
+    | '/admin/partners/$partnerId'
+    | '/api/public/v1/venues'
     | '/admin/customers'
+    | '/admin/partners'
+    | '/api/public/v1/venues/$slug'
   id:
     | '__root__'
     | '/'
@@ -150,16 +208,22 @@ export interface FileRouteTypes {
     | '/_authenticated/history'
     | '/_authenticated/report'
     | '/_authenticated/admin/deliveries'
+    | '/_authenticated/admin/products'
     | '/_authenticated/admin/reports'
     | '/_authenticated/admin/'
     | '/_authenticated/admin/customers/$customerId'
+    | '/_authenticated/admin/partners/$partnerId'
+    | '/api/public/v1/venues'
     | '/_authenticated/admin/customers/'
+    | '/_authenticated/admin/partners/'
+    | '/api/public/v1/venues/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   SetupRoute: typeof SetupRoute
+  ApiPublicV1VenuesRoute: typeof ApiPublicV1VenuesRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -220,6 +284,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminDeliveriesRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/products': {
+      id: '/_authenticated/admin/products'
+      path: '/products'
+      fullPath: '/admin/products'
+      preLoaderRoute: typeof AuthenticatedAdminProductsRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/reports': {
       id: '/_authenticated/admin/reports'
       path: '/reports'
@@ -241,24 +312,59 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminCustomersCustomerIdRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/partners/': {
+      id: '/_authenticated/admin/partners/'
+      path: '/partners'
+      fullPath: '/admin/partners/'
+      preLoaderRoute: typeof AuthenticatedAdminPartnersIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/partners/$partnerId': {
+      id: '/_authenticated/admin/partners/$partnerId'
+      path: '/partners/$partnerId'
+      fullPath: '/admin/partners/$partnerId'
+      preLoaderRoute: typeof AuthenticatedAdminPartnersPartnerIdRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/api/public/v1/venues': {
+      id: '/api/public/v1/venues'
+      path: '/api/public/v1/venues'
+      fullPath: '/api/public/v1/venues'
+      preLoaderRoute: typeof ApiPublicV1VenuesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/v1/venues/$slug': {
+      id: '/api/public/v1/venues/$slug'
+      path: '/$slug'
+      fullPath: '/api/public/v1/venues/$slug'
+      preLoaderRoute: typeof ApiPublicV1VenuesSlugRouteImport
+      parentRoute: typeof ApiPublicV1VenuesRoute
+    }
   }
 }
 
 interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminDeliveriesRoute: typeof AuthenticatedAdminDeliveriesRoute
+  AuthenticatedAdminProductsRoute: typeof AuthenticatedAdminProductsRoute
   AuthenticatedAdminReportsRoute: typeof AuthenticatedAdminReportsRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
   AuthenticatedAdminCustomersCustomerIdRoute: typeof AuthenticatedAdminCustomersCustomerIdRoute
+  AuthenticatedAdminPartnersPartnerIdRoute: typeof AuthenticatedAdminPartnersPartnerIdRoute
   AuthenticatedAdminCustomersIndexRoute: typeof AuthenticatedAdminCustomersIndexRoute
+  AuthenticatedAdminPartnersIndexRoute: typeof AuthenticatedAdminPartnersIndexRoute
 }
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminDeliveriesRoute: AuthenticatedAdminDeliveriesRoute,
+  AuthenticatedAdminProductsRoute: AuthenticatedAdminProductsRoute,
   AuthenticatedAdminReportsRoute: AuthenticatedAdminReportsRoute,
   AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
   AuthenticatedAdminCustomersCustomerIdRoute:
     AuthenticatedAdminCustomersCustomerIdRoute,
+  AuthenticatedAdminPartnersPartnerIdRoute:
+    AuthenticatedAdminPartnersPartnerIdRoute,
   AuthenticatedAdminCustomersIndexRoute: AuthenticatedAdminCustomersIndexRoute,
+  AuthenticatedAdminPartnersIndexRoute: AuthenticatedAdminPartnersIndexRoute,
 }
 
 const AuthenticatedAdminRouteWithChildren =
@@ -279,21 +385,23 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface ApiPublicV1VenuesRouteChildren {
+  ApiPublicV1VenuesSlugRoute: typeof ApiPublicV1VenuesSlugRoute
+}
+
+const ApiPublicV1VenuesRouteChildren: ApiPublicV1VenuesRouteChildren = {
+  ApiPublicV1VenuesSlugRoute: ApiPublicV1VenuesSlugRoute,
+}
+
+const ApiPublicV1VenuesRouteWithChildren =
+  ApiPublicV1VenuesRoute._addFileChildren(ApiPublicV1VenuesRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   SetupRoute: SetupRoute,
+  ApiPublicV1VenuesRoute: ApiPublicV1VenuesRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

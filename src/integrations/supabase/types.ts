@@ -17,32 +17,88 @@ export type Database = {
       customers: {
         Row: {
           active: boolean
+          address: string | null
+          city: string | null
+          contact_name: string | null
           created_at: string
           default_language: string
+          email: string | null
           id: string
+          image_url: string | null
+          instagram: string | null
+          latitude: number | null
           location: string | null
+          logo_url: string | null
+          longitude: number | null
+          menu_intro: string | null
           name: string
+          partner_id: string | null
+          phone: string | null
+          public_visible: boolean
+          serving_method: string | null
+          slug: string | null
           updated_at: string
+          website_url: string | null
         }
         Insert: {
           active?: boolean
+          address?: string | null
+          city?: string | null
+          contact_name?: string | null
           created_at?: string
           default_language?: string
+          email?: string | null
           id?: string
+          image_url?: string | null
+          instagram?: string | null
+          latitude?: number | null
           location?: string | null
+          logo_url?: string | null
+          longitude?: number | null
+          menu_intro?: string | null
           name: string
+          partner_id?: string | null
+          phone?: string | null
+          public_visible?: boolean
+          serving_method?: string | null
+          slug?: string | null
           updated_at?: string
+          website_url?: string | null
         }
         Update: {
           active?: boolean
+          address?: string | null
+          city?: string | null
+          contact_name?: string | null
           created_at?: string
           default_language?: string
+          email?: string | null
           id?: string
+          image_url?: string | null
+          instagram?: string | null
+          latitude?: number | null
           location?: string | null
+          logo_url?: string | null
+          longitude?: number | null
+          menu_intro?: string | null
           name?: string
+          partner_id?: string | null
+          phone?: string | null
+          public_visible?: boolean
+          serving_method?: string | null
+          slug?: string | null
           updated_at?: string
+          website_url?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "customers_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       deliveries: {
         Row: {
@@ -78,6 +134,90 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      partners: {
+        Row: {
+          active: boolean
+          contact_name: string | null
+          created_at: string
+          email: string | null
+          id: string
+          kind: Database["public"]["Enums"]["partner_kind"]
+          name: string
+          notes: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          contact_name?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["partner_kind"]
+          name: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          contact_name?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["partner_kind"]
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      products: {
+        Row: {
+          active: boolean
+          created_at: string
+          description_en: string | null
+          description_no: string | null
+          id: string
+          image_url: string | null
+          name_en: string
+          name_no: string
+          sku: string
+          slug: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          description_en?: string | null
+          description_no?: string | null
+          id?: string
+          image_url?: string | null
+          name_en: string
+          name_no: string
+          sku: string
+          slug: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          description_en?: string | null
+          description_no?: string | null
+          id?: string
+          image_url?: string | null
+          name_en?: string
+          name_no?: string
+          sku?: string
+          slug?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -192,6 +332,63 @@ export type Database = {
           },
         ]
       }
+      venue_menu_items: {
+        Row: {
+          available: boolean
+          created_at: string
+          customer_id: string
+          description: string | null
+          display_name: string | null
+          id: string
+          image_url: string | null
+          price_ore: number | null
+          product_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          available?: boolean
+          created_at?: string
+          customer_id: string
+          description?: string | null
+          display_name?: string | null
+          id?: string
+          image_url?: string | null
+          price_ore?: number | null
+          product_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          available?: boolean
+          created_at?: string
+          customer_id?: string
+          description?: string | null
+          display_name?: string | null
+          id?: string
+          image_url?: string | null
+          price_ore?: number | null
+          product_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_menu_items_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_menu_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -227,10 +424,12 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      slugify_name: { Args: { input: string }; Returns: string }
     }
     Enums: {
       app_role: "admin" | "customer"
       feedback_rating: "positive" | "mixed" | "negative"
+      partner_kind: "distributor" | "direct"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -360,6 +559,7 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "customer"],
       feedback_rating: ["positive", "mixed", "negative"],
+      partner_kind: ["distributor", "direct"],
     },
   },
 } as const
