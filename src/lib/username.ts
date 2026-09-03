@@ -8,27 +8,57 @@ export const LEGACY_USERNAME_EMAIL_DOMAIN = "customers.goldofsicily.no";
 /** Letters, numbers, dot, underscore and hyphen — safe as an email local-part. */
 export const USERNAME_PATTERN = /^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/;
 
+const REAL_EMAIL_PATTERN = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
+
 export function normalizeUsername(username: string) {
   return username.trim().toLowerCase();
 }
 
+/** Turn a typed login into an email-safe local-part (spaces, æøå, punctuation). */
+export function sanitizeUsername(username: string) {
+  return normalizeUsername(username)
+    .replaceAll("æ", "ae")
+    .replaceAll("ø", "o")
+    .replaceAll("å", "aa")
+    .replace(/[^a-z0-9._-]+/g, "")
+    .replace(/^\.+|\.+$/g, "")
+    .replace(/\.{2,}/g, ".");
+}
+
 export function isValidUsername(username: string) {
-  const value = normalizeUsername(username);
-  return value.length >= 3 && USERNAME_PATTERN.test(value) && !value.includes("..");
+  return parseLoginIdentifier(username) !== null;
+}
+
+export function parseLoginIdentifier(
+  identifier: string,
+): { username: string; email: string } | null {
+  const value = identifier.trim().toLowerCase();
+  if (!value) return null;
+
+  if (value.includes("@")) {
+    if (!REAL_EMAIL_PATTERN.test(value)) return null;
+    const username = sanitizeUsername(value.slice(0, value.indexOf("@")));
+    if (username.length < 3 || !USERNAME_PATTERN.test(username)) return null;
+    return { username, email: value };
+  }
+
+  const username = sanitizeUsername(value);
+  if (username.length < 3 || !USERNAME_PATTERN.test(username)) return null;
+  return { username, email: `${username}@${USERNAME_EMAIL_DOMAIN}` };
 }
 
 export function usernameToEmail(username: string) {
-  return `${normalizeUsername(username)}@${USERNAME_EMAIL_DOMAIN}`;
+  return (
+    parseLoginIdentifier(username)?.email ??
+    `${sanitizeUsername(username)}@${USERNAME_EMAIL_DOMAIN}`
+  );
 }
 
 export function identifierToEmailCandidates(identifier: string) {
-  const value = identifier.trim();
-  if (!value) return [];
-  if (value.includes("@")) return [value.toLowerCase()];
-  const local = normalizeUsername(value);
-  return [
-    ...new Set([`${local}@${USERNAME_EMAIL_DOMAIN}`, `${local}@${LEGACY_USERNAME_EMAIL_DOMAIN}`]),
-  ];
+  const parsed = parseLoginIdentifier(identifier);
+  if (!parsed) return [];
+  if (identifier.trim().includes("@")) return [parsed.email];
+  return [...new Set([parsed.email, `${parsed.username}@${LEGACY_USERNAME_EMAIL_DOMAIN}`])];
 }
 
 // Admins may create accounts with a real email address instead of a username.

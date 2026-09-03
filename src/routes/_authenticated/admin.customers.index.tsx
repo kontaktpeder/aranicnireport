@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { statusToken, useAdminOverview } from "@/lib/admin-data";
 import { createCustomerAccount } from "@/lib/admin.functions";
-import { isValidUsername } from "@/lib/username";
+import { isValidUsername, parseLoginIdentifier } from "@/lib/username";
 import { errorMessage } from "@/lib/utils";
 import { PrimaryButton, TextField } from "@/components/field";
 
@@ -37,6 +37,7 @@ function AdminCustomers() {
   const [password, setPassword] = useState("");
   const [language, setLanguage] = useState<"no" | "en">("no");
   const [busy, setBusy] = useState(false);
+  const loginPreview = parseLoginIdentifier(username)?.username;
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -53,7 +54,9 @@ function AdminCustomers() {
       const created = await create({
         data: { name, location, username, password, language, active: true },
       });
-      toast.success(`${name.trim()} ${t("create_customer_created")}`);
+      toast.success(
+        `${name.trim()} ${t("create_customer_created")} (${loginPreview ?? username.trim()})`,
+      );
       setOpen(false);
       setName("");
       setLocation("");
@@ -67,7 +70,21 @@ function AdminCustomers() {
         });
       }
     } catch (error) {
-      toast.error(errorMessage(error, t("create_customer_failed")));
+      const message = errorMessage(error, t("create_customer_failed"));
+      const lower = message.toLowerCase();
+      if (lower.includes("already") || lower.includes("opptatt")) {
+        toast.error(t("create_customer_username_taken"));
+      } else if (
+        lower.includes("weak") ||
+        lower.includes("pwned") ||
+        lower.includes("easy to guess")
+      ) {
+        toast.error(t("create_customer_weak_password"));
+      } else if (lower.includes("invalid format") || lower.includes("23505")) {
+        toast.error(t("create_customer_username"));
+      } else {
+        toast.error(message);
+      }
     } finally {
       setBusy(false);
     }
@@ -91,7 +108,14 @@ function AdminCustomers() {
         <form className="surface-card mt-5 space-y-4 p-5" onSubmit={submit}>
           <TextField label={t("customer_name")} value={name} onChange={setName} />
           <TextField label={t("location")} value={location} onChange={setLocation} />
-          <TextField label={t("username")} value={username} onChange={setUsername} />
+          <div>
+            <TextField label={t("username")} value={username} onChange={setUsername} />
+            {loginPreview && loginPreview !== username.trim().toLowerCase() ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {t("create_customer_login_as")}: <strong>{loginPreview}</strong>
+              </p>
+            ) : null}
+          </div>
           <TextField
             label={t("password")}
             value={password}

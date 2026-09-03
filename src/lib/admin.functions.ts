@@ -1,23 +1,59 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { usernameToEmail, normalizeUsername, isValidUsername } from "@/lib/username";
+import { parseLoginIdentifier, normalizeUsername, usernameToEmail } from "@/lib/username";
 
 const createSchema = z.object({
   name: z.string().trim().min(1),
   location: z.string().trim().optional().default(""),
-  username: z
-    .string()
-    .trim()
-    .min(3)
-    .transform(normalizeUsername)
-    .refine((value) => isValidUsername(value), {
-      message: "Username can only contain letters, numbers, dots, hyphens and underscores (min 3).",
-    }),
+  username: z.string().trim().min(3),
   password: z.string().min(6),
   language: z.enum(["no", "en"]).default("no"),
   active: z.boolean().default(true),
 });
+
+type AdminClient = Awaited<typeof import("@/integrations/supabase/client.server")>["supabaseAdmin"];
+
+async function saveProfile(
+  supabaseAdmin: AdminClient,
+  row: {
+    id: string;
+    username: string;
+    customer_id?: string | null;
+    preferred_language?: string;
+  },
+) {
+  const { data: existing } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .eq("id", row.id)
+    .maybeSingle();
+
+  const patch = {
+    username: row.username,
+    ...(row.customer_id !== undefined ? { customer_id: row.customer_id } : {}),
+    ...(row.preferred_language !== undefined ? { preferred_language: row.preferred_language } : {}),
+  };
+
+  if (existing) {
+    const { error } = await supabaseAdmin.from("profiles").update(patch).eq("id", row.id);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  const { error } = await supabaseAdmin.from("profiles").insert({ id: row.id, ...patch });
+  if (!error) return;
+  // Auth trigger may have inserted the row between the select and insert.
+  if (error.code === "23505") {
+    const { error: updateError } = await supabaseAdmin
+      .from("profiles")
+      .update(patch)
+      .eq("id", row.id);
+    if (updateError) throw new Error(updateError.message);
+    return;
+  }
+  throw new Error(error.message);
+}
 
 async function assertAdmin(supabase: {
   rpc: (fn: "is_admin") => Promise<{ data: unknown; error: { message: string } | null }>;
@@ -38,7 +74,13 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
     await assertAdmin(context.supabase as never);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const username = data.username;
+    const login = parseLoginIdentifier(data.username);
+    if (!login) {
+      throw new Error(
+        "Username can only contain letters, numbers, dots, hyphens and underscores (min 3).",
+      );
+    }
+    const { username, email } = login;
 
     const { data: taken } = await supabaseAdmin
       .from("profiles")
@@ -63,7 +105,7 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
     let userId: string | undefined;
     try {
       const { data: created, error: userError } = await supabaseAdmin.auth.admin.createUser({
-        email: usernameToEmail(username),
+        email,
         password: data.password,
         email_confirm: true,
         user_metadata: {
@@ -77,16 +119,12 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
       }
       userId = created.user.id;
 
-      const { error: profileError } = await supabaseAdmin.from("profiles").upsert(
-        {
-          id: userId,
-          username,
-          customer_id: customer.id,
-          preferred_language: data.language,
-        },
-        { onConflict: "id" },
-      );
-      if (profileError) throw new Error(profileError.message);
+      await saveProfile(supabaseAdmin, {
+        id: userId,
+        username,
+        customer_id: customer.id,
+        preferred_language: data.language,
+      });
 
       const { error: roleError } = await supabaseAdmin
         .from("user_roles")
@@ -147,12 +185,11 @@ export const bootstrapFirstAdmin = createServerFn({ method: "POST" })
     if (userError || !created?.user)
       throw new Error(userError?.message ?? "Could not create admin");
 
-    const { error: profileError } = await supabaseAdmin
-      .from("profiles")
-      .upsert({ id: created.user.id, username }, { onConflict: "id" });
-    if (profileError) {
+    try {
+      await saveProfile(supabaseAdmin, { id: created.user.id, username });
+    } catch (error) {
       await supabaseAdmin.auth.admin.deleteUser(created.user.id);
-      throw new Error(profileError.message);
+      throw error;
     }
     const { error: roleError } = await supabaseAdmin
       .from("user_roles")
