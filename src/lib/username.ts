@@ -6,8 +6,23 @@ export function normalizeUsername(username: string) {
   return username.trim().toLowerCase();
 }
 
+// Strip everything an email local-part cannot contain (spaces, æøå, quotes …)
+// so a human-friendly username still yields a valid synthetic address.
+export function usernameToLocalPart(username: string) {
+  return normalizeUsername(username)
+    .replace(/æ/g, "ae")
+    .replace(/ø/g, "o")
+    .replace(/å/g, "a")
+    .normalize("NFKD")
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^[-.]+|[-.]+$/g, "");
+}
+
 export function usernameToEmail(username: string) {
-  return `${normalizeUsername(username)}@${USERNAME_EMAIL_DOMAIN}`;
+  // Already a real email address → use it verbatim.
+  const value = normalizeUsername(username);
+  if (value.includes("@")) return value;
+  return `${usernameToLocalPart(value)}@${USERNAME_EMAIL_DOMAIN}`;
 }
 
 // Admins may create accounts with a real email address instead of a username.
