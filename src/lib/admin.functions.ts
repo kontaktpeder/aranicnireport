@@ -48,7 +48,7 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
     if (customerError || !customer) throw new Error(customerError?.message ?? "Could not create customer");
 
     const { data: created, error: userError } = await supabaseAdmin.auth.admin.createUser({
-      email: usernameToEmail(username),
+      email,
       password: data.password,
       email_confirm: true,
       user_metadata: { username },
