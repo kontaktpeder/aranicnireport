@@ -10,6 +10,8 @@ import { formatDate } from "@/lib/sign-out";
 import { errorMessage } from "@/lib/utils";
 import { resetCustomerPassword } from "@/lib/admin.functions";
 import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
+import { FlavorBreakdown } from "@/components/flavor-lines";
+import type { StoredFlavorLine } from "@/lib/flavors";
 
 export const Route = createFileRoute("/_authenticated/admin/customers/$customerId")({
   head: () => ({
@@ -48,7 +50,9 @@ function CustomerDetail() {
           .maybeSingle(),
         supabase
           .from("shift_reports")
-          .select("*")
+          .select(
+            "*, shift_report_lines(product_id, sold, remaining_stock, next_required_quantity, products(name_no, name_en))",
+          )
           .eq("customer_id", customerId)
           .order("created_at", { ascending: false })
           .limit(100),
@@ -188,6 +192,7 @@ function CustomerDetail() {
                     <strong className="tabular-nums">{report.next_required_quantity ?? "—"}</strong>
                   </span>
                 </div>
+                <FlavorBreakdown lines={report.shift_report_lines as StoredFlavorLine[] | null} />
                 {report.needs_review ? (
                   <p className="mt-3 flex items-start gap-2 rounded-xl bg-warning/15 px-3 py-2 text-xs">
                     <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />

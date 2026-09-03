@@ -21,6 +21,13 @@ export type CustomerRow = {
   status: "green" | "orange" | "red";
 };
 
+export type FlavorWeekRow = {
+  productId: string;
+  nameNo: string;
+  nameEn: string;
+  sold: number;
+};
+
 export type PartnerOverview = {
   id: string;
   name: string;
@@ -58,7 +65,7 @@ export function useAdminOverview() {
       const weekStart = startOfWeek();
       const monthStart = startOfMonth();
       const recentCutoff = daysAgoIso(30);
-      const [customersRes, reportsRes, deliveriesRes, partnersRes] = await Promise.all([
+      const [customersRes, reportsRes, deliveriesRes, partnersRes, linesRes] = await Promise.all([
         supabase.from("customers").select("*").order("name"),
         supabase
           .from("shift_reports")
@@ -71,6 +78,10 @@ export function useAdminOverview() {
           .order("delivered_at", { ascending: false })
           .limit(1000),
         supabase.from("partners").select("*").order("name"),
+        supabase
+          .from("shift_report_lines")
+          .select("sold, product_id, products(name_no, name_en), shift_reports(created_at)")
+          .limit(3000),
       ]);
 
       if (customersRes.error) throw customersRes.error;
@@ -146,10 +157,30 @@ export function useAdminOverview() {
       });
       const unassigned = rows.filter((row) => !row.partnerId);
 
+      const flavorWeekMap = new Map<string, FlavorWeekRow>();
+      for (const line of linesRes.data ?? []) {
+        const report = line.shift_reports as { created_at: string } | null;
+        if (!report || report.created_at < weekStart) continue;
+        const product = line.products as { name_no: string; name_en: string } | null;
+        const existing = flavorWeekMap.get(line.product_id);
+        if (existing) {
+          existing.sold += line.sold ?? 0;
+        } else {
+          flavorWeekMap.set(line.product_id, {
+            productId: line.product_id,
+            nameNo: product?.name_no ?? line.product_id,
+            nameEn: product?.name_en ?? line.product_id,
+            sold: line.sold ?? 0,
+          });
+        }
+      }
+      const flavorWeek = [...flavorWeekMap.values()].sort((a, b) => b.sold - a.sold);
+
       return {
         rows,
         partners: partnerOverviews,
         unassigned,
+        flavorWeek,
         metrics: {
           soldThisWeek: active.reduce((sum, row) => sum + row.soldThisWeek, 0),
           currentStock: active.reduce((sum, row) => sum + row.estimatedStock, 0),
