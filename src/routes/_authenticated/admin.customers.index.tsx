@@ -1,9 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { ChevronRight, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
 import { statusToken, useAdminOverview } from "@/lib/admin-data";
 import { createCustomerAccount } from "@/lib/admin.functions";
@@ -33,11 +34,27 @@ function AdminCustomers() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
+  const [city, setCity] = useState("");
+  const [partnerId, setPartnerId] = useState("");
+  const [directPartner, setDirectPartner] = useState(false);
+  const [publicVisible, setPublicVisible] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [language, setLanguage] = useState<"no" | "en">("no");
   const [busy, setBusy] = useState(false);
   const loginPreview = parseLoginIdentifier(username)?.username;
+
+  const { data: partners } = useQuery({
+    queryKey: ["partners-list"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("partners")
+        .select("id, name, kind")
+        .eq("active", true)
+        .order("name");
+      return data ?? [];
+    },
+  });
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -52,7 +69,18 @@ function AdminCustomers() {
     setBusy(true);
     try {
       const created = await create({
-        data: { name, location, username, password, language, active: true },
+        data: {
+          name,
+          location,
+          city,
+          partnerId: partnerId || null,
+          directPartner,
+          publicVisible,
+          username,
+          password,
+          language,
+          active: true,
+        },
       });
       toast.success(
         `${name.trim()} ${t("create_customer_created")} (${loginPreview ?? username.trim()})`,
@@ -107,7 +135,55 @@ function AdminCustomers() {
       {open ? (
         <form className="surface-card mt-5 space-y-4 p-5" onSubmit={submit}>
           <TextField label={t("customer_name")} value={name} onChange={setName} />
+          <TextField label={t("city")} value={city} onChange={setCity} />
           <TextField label={t("location")} value={location} onChange={setLocation} />
+          <label className="block">
+            <span className="eyebrow mb-2 block">{t("partner")}</span>
+            <select
+              value={partnerId}
+              onChange={(event) => setPartnerId(event.target.value)}
+              disabled={directPartner}
+              className="h-13 w-full rounded-2xl border-2 border-border bg-card px-4 text-base outline-none focus:border-primary disabled:opacity-50"
+            >
+              <option value="">—</option>
+              {partners?.map((partner) => (
+                <option key={partner.id} value={partner.id}>
+                  {partner.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => {
+              setDirectPartner((value) => !value);
+              if (!directPartner) setPartnerId("");
+            }}
+            className="flex items-center gap-3 text-left text-sm"
+          >
+            <span
+              className={`flex h-7 w-12 shrink-0 items-center rounded-full p-1 ${directPartner ? "bg-success" : "bg-muted"}`}
+            >
+              <span
+                className={`size-5 rounded-full bg-card transition-transform ${directPartner ? "translate-x-5" : ""}`}
+              />
+            </span>
+            {t("direct_partner_hint")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setPublicVisible((value) => !value)}
+            className="flex items-center gap-3 text-left text-sm"
+          >
+            <span
+              className={`flex h-7 w-12 shrink-0 items-center rounded-full p-1 ${publicVisible ? "bg-success" : "bg-muted"}`}
+            >
+              <span
+                className={`size-5 rounded-full bg-card transition-transform ${publicVisible ? "translate-x-5" : ""}`}
+              />
+            </span>
+            {publicVisible ? t("public_yes") : t("public_no")}
+          </button>
           <div>
             <TextField label={t("username")} value={username} onChange={setUsername} />
             {loginPreview && loginPreview !== username.trim().toLowerCase() ? (
@@ -166,7 +242,8 @@ function AdminCustomers() {
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold">{row.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {row.location ?? "—"} · {row.active ? t("active") : t("inactive")}
+                  {row.location ?? row.city ?? "—"} · {row.active ? t("active") : t("inactive")}
+                  {row.publicVisible ? ` · ${t("public_yes")}` : ""}
                 </p>
               </div>
               <ChevronRight className="size-4 text-muted-foreground" />

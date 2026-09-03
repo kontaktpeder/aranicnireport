@@ -9,7 +9,7 @@ import { useI18n } from "@/lib/i18n";
 import { formatDate } from "@/lib/sign-out";
 import { errorMessage } from "@/lib/utils";
 import { resetCustomerPassword } from "@/lib/admin.functions";
-import { PrimaryButton, TextField } from "@/components/field";
+import { PrimaryButton, TextAreaField, TextField } from "@/components/field";
 
 export const Route = createFileRoute("/_authenticated/admin/customers/$customerId")({
   head: () => ({
@@ -29,7 +29,7 @@ export const Route = createFileRoute("/_authenticated/admin/customers/$customerI
   component: CustomerDetail,
 });
 
-type Tab = "overview" | "reports" | "deliveries" | "account";
+type Tab = "overview" | "reports" | "deliveries" | "profile" | "menu" | "account";
 
 function CustomerDetail() {
   const { customerId } = Route.useParams();
@@ -40,8 +40,12 @@ function CustomerDetail() {
   const { data } = useQuery({
     queryKey: ["customer-detail", customerId],
     queryFn: async () => {
-      const [customer, reports, deliveries, profile] = await Promise.all([
-        supabase.from("customers").select("*").eq("id", customerId).maybeSingle(),
+      const [customer, reports, deliveries, profile, menu, products, partners] = await Promise.all([
+        supabase
+          .from("customers")
+          .select("*, partners(id, name)")
+          .eq("id", customerId)
+          .maybeSingle(),
         supabase
           .from("shift_reports")
           .select("*")
@@ -59,12 +63,22 @@ function CustomerDetail() {
           .select("id, username, preferred_language")
           .eq("customer_id", customerId)
           .maybeSingle(),
+        supabase
+          .from("venue_menu_items")
+          .select("*, products(*)")
+          .eq("customer_id", customerId)
+          .order("sort_order"),
+        supabase.from("products").select("*").eq("active", true).order("sort_order"),
+        supabase.from("partners").select("id, name, kind").eq("active", true).order("name"),
       ]);
       return {
         customer: customer.data,
         reports: reports.data ?? [],
         deliveries: deliveries.data ?? [],
         profile: profile.data,
+        menu: menu.data ?? [],
+        products: products.data ?? [],
+        partners: partners.data ?? [],
       };
     },
   });
@@ -97,25 +111,28 @@ function CustomerDetail() {
         </Link>
         <h1 className="mt-3 text-3xl font-semibold">{data?.customer?.name ?? "—"}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {data?.customer?.location ?? "—"} ·{" "}
+          {data?.customer?.city || data?.customer?.location || "—"} ·{" "}
           {data?.customer?.active ? t("active") : t("inactive")}
+          {data?.customer?.public_visible ? ` · ${t("public_yes")}` : ""}
         </p>
       </div>
 
       <div className="mt-6 flex gap-1 overflow-x-auto">
-        {(["overview", "reports", "deliveries", "account"] as Tab[]).map((option) => (
-          <button
-            key={option}
-            onClick={() => setTab(option)}
-            className={`rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap ${
-              tab === option
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t(option === "reports" ? "reports" : option === "deliveries" ? "deliveries" : option)}
-          </button>
-        ))}
+        {(["overview", "reports", "deliveries", "profile", "menu", "account"] as Tab[]).map(
+          (option) => (
+            <button
+              key={option}
+              onClick={() => setTab(option)}
+              className={`rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap ${
+                tab === option
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t(option)}
+            </button>
+          ),
+        )}
       </div>
 
       {tab === "overview" ? (
@@ -210,6 +227,23 @@ function CustomerDetail() {
         </div>
       ) : null}
 
+      {tab === "profile" && data?.customer ? (
+        <ProfileTab
+          customer={data.customer}
+          partners={data.partners}
+          onSaved={() => queryClient.invalidateQueries()}
+        />
+      ) : null}
+
+      {tab === "menu" && data?.customer ? (
+        <MenuTab
+          customerId={customerId}
+          menu={data.menu}
+          products={data.products}
+          onSaved={() => queryClient.invalidateQueries()}
+        />
+      ) : null}
+
       {tab === "account" && data?.customer ? (
         <AccountTab
           customer={data.customer}
@@ -244,7 +278,13 @@ function AccountTab({
   profile,
   onSaved,
 }: {
-  customer: { id: string; name: string; location: string | null; active: boolean; default_language: string };
+  customer: {
+    id: string;
+    name: string;
+    location: string | null;
+    active: boolean;
+    default_language: string;
+  };
   profile: { id: string; username: string; preferred_language: string } | null;
   onSaved: () => void;
 }) {
@@ -277,10 +317,7 @@ function AccountTab({
       })
       .eq("id", customer.id);
     if (!error && profile) {
-      await supabase
-        .from("profiles")
-        .update({ preferred_language: language })
-        .eq("id", profile.id);
+      await supabase.from("profiles").update({ preferred_language: language }).eq("id", profile.id);
     }
     setBusy(false);
     if (error) {
@@ -366,5 +403,382 @@ function AccountTab({
         </PrimaryButton>
       </div>
     </div>
+  );
+}
+
+type VenueProfile = {
+  id: string;
+  name: string;
+  location: string | null;
+  city: string | null;
+  address: string | null;
+  slug: string | null;
+  partner_id: string | null;
+  contact_name: string | null;
+  email: string | null;
+  phone: string | null;
+  website_url: string | null;
+  instagram: string | null;
+  image_url: string | null;
+  logo_url: string | null;
+  serving_method: string | null;
+  menu_intro: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  public_visible: boolean;
+};
+
+function ProfileTab({
+  customer,
+  partners,
+  onSaved,
+}: {
+  customer: VenueProfile;
+  partners: { id: string; name: string; kind: string }[];
+  onSaved: () => void;
+}) {
+  const { t } = useI18n();
+  const [form, setForm] = useState({
+    name: customer.name,
+    city: customer.city ?? "",
+    address: customer.address ?? "",
+    location: customer.location ?? "",
+    slug: customer.slug ?? "",
+    partnerId: customer.partner_id ?? "",
+    contact: customer.contact_name ?? "",
+    email: customer.email ?? "",
+    phone: customer.phone ?? "",
+    website: customer.website_url ?? "",
+    instagram: customer.instagram ?? "",
+    imageUrl: customer.image_url ?? "",
+    logoUrl: customer.logo_url ?? "",
+    servingMethod: customer.serving_method ?? "",
+    menuIntro: customer.menu_intro ?? "",
+    latitude: customer.latitude?.toString() ?? "",
+    longitude: customer.longitude?.toString() ?? "",
+    publicVisible: customer.public_visible,
+  });
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setForm({
+      name: customer.name,
+      city: customer.city ?? "",
+      address: customer.address ?? "",
+      location: customer.location ?? "",
+      slug: customer.slug ?? "",
+      partnerId: customer.partner_id ?? "",
+      contact: customer.contact_name ?? "",
+      email: customer.email ?? "",
+      phone: customer.phone ?? "",
+      website: customer.website_url ?? "",
+      instagram: customer.instagram ?? "",
+      imageUrl: customer.image_url ?? "",
+      logoUrl: customer.logo_url ?? "",
+      servingMethod: customer.serving_method ?? "",
+      menuIntro: customer.menu_intro ?? "",
+      latitude: customer.latitude?.toString() ?? "",
+      longitude: customer.longitude?.toString() ?? "",
+      publicVisible: customer.public_visible,
+    });
+  }, [customer]);
+
+  function patch<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function save() {
+    setBusy(true);
+    const { error } = await supabase
+      .from("customers")
+      .update({
+        name: form.name.trim(),
+        city: form.city.trim() || null,
+        address: form.address.trim() || null,
+        location: form.location.trim() || form.city.trim() || null,
+        slug: form.slug.trim() || null,
+        partner_id: form.partnerId || null,
+        contact_name: form.contact.trim() || null,
+        email: form.email.trim() || null,
+        phone: form.phone.trim() || null,
+        website_url: form.website.trim() || null,
+        instagram: form.instagram.trim() || null,
+        image_url: form.imageUrl.trim() || null,
+        logo_url: form.logoUrl.trim() || null,
+        serving_method: form.servingMethod.trim() || null,
+        menu_intro: form.menuIntro.trim() || null,
+        latitude: form.latitude.trim() ? Number(form.latitude) : null,
+        longitude: form.longitude.trim() ? Number(form.longitude) : null,
+        public_visible: form.publicVisible,
+      })
+      .eq("id", customer.id);
+    setBusy(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(t("save"));
+    onSaved();
+  }
+
+  return (
+    <div className="surface-card mt-5 space-y-4 p-5">
+      <TextField
+        label={t("customer_name")}
+        value={form.name}
+        onChange={(value) => patch("name", value)}
+      />
+      <TextField label={t("city")} value={form.city} onChange={(value) => patch("city", value)} />
+      <TextField
+        label={t("address")}
+        value={form.address}
+        onChange={(value) => patch("address", value)}
+      />
+      <TextField label={t("slug")} value={form.slug} onChange={(value) => patch("slug", value)} />
+      <label className="block">
+        <span className="eyebrow mb-2 block">{t("partner")}</span>
+        <select
+          value={form.partnerId}
+          onChange={(event) => patch("partnerId", event.target.value)}
+          className="h-13 w-full rounded-2xl border-2 border-border bg-card px-4 text-base outline-none focus:border-primary"
+        >
+          <option value="">—</option>
+          {partners.map((partner) => (
+            <option key={partner.id} value={partner.id}>
+              {partner.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <TextField
+        label={t("contact_name")}
+        value={form.contact}
+        onChange={(value) => patch("contact", value)}
+      />
+      <TextField
+        label={t("phone")}
+        value={form.phone}
+        onChange={(value) => patch("phone", value)}
+      />
+      <TextField
+        label={t("email")}
+        value={form.email}
+        onChange={(value) => patch("email", value)}
+      />
+      <TextField
+        label={t("website")}
+        value={form.website}
+        onChange={(value) => patch("website", value)}
+      />
+      <TextField
+        label={t("instagram")}
+        value={form.instagram}
+        onChange={(value) => patch("instagram", value)}
+      />
+      <TextField
+        label={t("image_url")}
+        value={form.imageUrl}
+        onChange={(value) => patch("imageUrl", value)}
+      />
+      <TextField
+        label={t("logo_url")}
+        value={form.logoUrl}
+        onChange={(value) => patch("logoUrl", value)}
+      />
+      <TextField
+        label={t("serving_method")}
+        value={form.servingMethod}
+        onChange={(value) => patch("servingMethod", value)}
+      />
+      <label className="block">
+        <span className="eyebrow mb-2 block">{t("menu_intro")}</span>
+        <TextAreaField value={form.menuIntro} onChange={(value) => patch("menuIntro", value)} />
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <TextField
+          label={t("latitude")}
+          value={form.latitude}
+          onChange={(value) => patch("latitude", value)}
+        />
+        <TextField
+          label={t("longitude")}
+          value={form.longitude}
+          onChange={(value) => patch("longitude", value)}
+        />
+      </div>
+      <button
+        type="button"
+        onClick={() => patch("publicVisible", !form.publicVisible)}
+        className="flex items-center gap-3 text-sm font-medium"
+      >
+        <span
+          className={`flex h-7 w-12 items-center rounded-full p-1 ${form.publicVisible ? "bg-success" : "bg-muted"}`}
+        >
+          <span
+            className={`size-5 rounded-full bg-card transition-transform ${form.publicVisible ? "translate-x-5" : ""}`}
+          />
+        </span>
+        {form.publicVisible ? t("public_yes") : t("public_no")}
+      </button>
+      <PrimaryButton onClick={save} disabled={busy}>
+        {t("save")}
+      </PrimaryButton>
+    </div>
+  );
+}
+
+type MenuRow = {
+  id: string;
+  product_id: string;
+  display_name: string | null;
+  description: string | null;
+  price_ore: number | null;
+  available: boolean;
+  products: { name_no: string; slug: string } | null;
+};
+
+function MenuTab({
+  customerId,
+  menu,
+  products,
+  onSaved,
+}: {
+  customerId: string;
+  menu: MenuRow[];
+  products: { id: string; name_no: string }[];
+  onSaved: () => void;
+}) {
+  const { t } = useI18n();
+  const used = new Set(menu.map((item) => item.product_id));
+  const availableProducts = products.filter((product) => !used.has(product.id));
+  const [productId, setProductId] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [price, setPrice] = useState("79");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!productId && availableProducts[0]) setProductId(availableProducts[0].id);
+  }, [availableProducts, productId]);
+
+  async function addItem() {
+    if (!productId) return;
+    setBusy(true);
+    const priceNok = Number(price.replace(",", "."));
+    const { error } = await supabase.from("venue_menu_items").insert({
+      customer_id: customerId,
+      product_id: productId,
+      display_name: displayName.trim() || null,
+      price_ore: Number.isFinite(priceNok) ? Math.round(priceNok * 100) : null,
+      available: true,
+      sort_order: menu.length * 10,
+    });
+    setBusy(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setDisplayName("");
+    onSaved();
+  }
+
+  return (
+    <div className="mt-5 space-y-4">
+      {menu.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{t("history_empty")}</p>
+      ) : null}
+      {menu.map((item) => (
+        <MenuItemCard key={item.id} item={item} onSaved={onSaved} />
+      ))}
+
+      {availableProducts.length > 0 ? (
+        <div className="surface-card space-y-4 p-5">
+          <p className="font-semibold">{t("add_to_menu")}</p>
+          <label className="block">
+            <span className="eyebrow mb-2 block">{t("products")}</span>
+            <select
+              value={productId}
+              onChange={(event) => setProductId(event.target.value)}
+              className="h-13 w-full rounded-2xl border-2 border-border bg-card px-4 text-base outline-none focus:border-primary"
+            >
+              {availableProducts.map((product) => (
+                <option key={product.id} value={product.id}>
+                  {product.name_no}
+                </option>
+              ))}
+            </select>
+          </label>
+          <TextField label={t("dish_name")} value={displayName} onChange={setDisplayName} />
+          <TextField label={t("price_guest")} value={price} onChange={setPrice} />
+          <PrimaryButton onClick={addItem} disabled={busy || !productId}>
+            {t("add_to_menu")}
+          </PrimaryButton>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MenuItemCard({ item, onSaved }: { item: MenuRow; onSaved: () => void }) {
+  const { t } = useI18n();
+  const [displayName, setDisplayName] = useState(item.display_name ?? "");
+  const [price, setPrice] = useState(item.price_ore == null ? "" : String(item.price_ore / 100));
+
+  useEffect(() => {
+    setDisplayName(item.display_name ?? "");
+    setPrice(item.price_ore == null ? "" : String(item.price_ore / 100));
+  }, [item]);
+
+  async function save() {
+    const nok = Number(price.replace(",", "."));
+    const { error } = await supabase
+      .from("venue_menu_items")
+      .update({
+        display_name: displayName.trim() || null,
+        price_ore: price.trim() && Number.isFinite(nok) ? Math.round(nok * 100) : null,
+      })
+      .eq("id", item.id);
+    if (error) toast.error(error.message);
+    else {
+      toast.success(t("save"));
+      onSaved();
+    }
+  }
+
+  async function toggle() {
+    const { error } = await supabase
+      .from("venue_menu_items")
+      .update({ available: !item.available })
+      .eq("id", item.id);
+    if (error) toast.error(error.message);
+    else onSaved();
+  }
+
+  async function removeItem() {
+    const { error } = await supabase.from("venue_menu_items").delete().eq("id", item.id);
+    if (error) toast.error(error.message);
+    else onSaved();
+  }
+
+  return (
+    <article className="surface-card space-y-3 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-semibold">{item.display_name || item.products?.name_no}</p>
+        <button
+          type="button"
+          onClick={toggle}
+          className="text-xs font-semibold text-muted-foreground"
+        >
+          {item.available ? t("available") : t("unavailable")}
+        </button>
+      </div>
+      <TextField label={t("dish_name")} value={displayName} onChange={setDisplayName} />
+      <TextField label={t("price_guest")} value={price} onChange={setPrice} />
+      <div className="flex gap-3">
+        <PrimaryButton onClick={save}>{t("save")}</PrimaryButton>
+      </div>
+      <button type="button" onClick={removeItem} className="text-xs text-destructive">
+        {t("remove")}
+      </button>
+    </article>
   );
 }

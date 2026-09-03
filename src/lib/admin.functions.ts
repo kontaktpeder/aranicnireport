@@ -6,6 +6,10 @@ import { parseLoginIdentifier, normalizeUsername, usernameToEmail } from "@/lib/
 const createSchema = z.object({
   name: z.string().trim().min(1),
   location: z.string().trim().optional().default(""),
+  city: z.string().trim().optional().default(""),
+  partnerId: z.string().uuid().nullable().optional(),
+  directPartner: z.boolean().default(false),
+  publicVisible: z.boolean().default(false),
   username: z.string().trim().min(3),
   password: z.string().min(6),
   language: z.enum(["no", "en"]).default("no"),
@@ -89,11 +93,32 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
       .maybeSingle();
     if (taken) throw new Error("Username is already taken");
 
+    let partnerId = data.partnerId ?? null;
+    if (data.directPartner && !partnerId) {
+      const { data: partner, error: partnerError } = await supabaseAdmin
+        .from("partners")
+        .insert({
+          name: data.name,
+          kind: "direct",
+          active: true,
+        })
+        .select("id")
+        .single();
+      if (partnerError || !partner) {
+        throw new Error(partnerError?.message ?? "Could not create trade partner");
+      }
+      partnerId = partner.id;
+    }
+
+    const city = data.city.trim() || data.location.trim() || null;
     const { data: customer, error: customerError } = await supabaseAdmin
       .from("customers")
       .insert({
         name: data.name,
-        location: data.location || null,
+        location: data.location || city,
+        city,
+        partner_id: partnerId,
+        public_visible: data.publicVisible,
         active: data.active,
         default_language: data.language,
       })
