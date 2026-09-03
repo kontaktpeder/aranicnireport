@@ -80,7 +80,11 @@ function LoginPage() {
       .select("role")
       .eq("user_id", session.user.id);
     const isAdmin = (roles ?? []).some((r) => r.role === "admin");
-    void navigate({ to: isAdmin ? "/admin" : "/report", replace: true });
+    try {
+      await navigate({ to: isAdmin ? "/admin" : "/report", replace: true });
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

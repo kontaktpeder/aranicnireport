@@ -51,10 +51,15 @@ export function useSessionInfo() {
   const [ready, setReady] = useState(false);
   useEffect(() => setReady(true), []);
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ["session-info"],
     queryFn: loadSessionInfo,
     enabled: ready,
     staleTime: 30_000,
   });
+
+  return {
+    ...query,
+    isLoading: !ready || query.isPending,
+  };
 }
