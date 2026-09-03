@@ -35,7 +35,10 @@ const dict = {
   q_delivery: { no: "Levering", en: "Delivery" },
   delivered_intro_1: { no: "Vi leverte", en: "We delivered" },
   delivered_intro_2: { no: "stk.", en: "pcs." },
-  delivery_correct_q: { no: "Fikk dere riktig antall?", en: "Did you receive the correct quantity?" },
+  delivery_correct_q: {
+    no: "Fikk dere riktig antall?",
+    en: "Did you receive the correct quantity?",
+  },
   no_delivery: {
     no: "Ingen levering registrert ennå.",
     en: "No delivery registered yet.",
@@ -106,6 +109,28 @@ const dict = {
   overview: { no: "Oversikt", en: "Overview" },
   account: { no: "Konto", en: "Account" },
   new_customer: { no: "Ny kunde", en: "New customer" },
+  create_customer_missing: {
+    no: "Kundenavn, brukernavn (minst 3 tegn) og passord (minst 6 tegn) er påkrevd.",
+    en: "Name, username (min 3) and password (min 6) are required.",
+  },
+  create_customer_username: {
+    no: "Brukernavn må ha minst 3 bokstaver eller tall. Mellomrom og æøå blir gjort om automatisk.",
+    en: "Username needs at least 3 letters or numbers. Spaces and æøå are converted automatically.",
+  },
+  create_customer_login_as: { no: "Innlogging som", en: "Signs in as" },
+  create_customer_weak_password: {
+    no: "Passordet er for vanlig. Velg et mer unikt passord.",
+    en: "That password is too common. Choose a stronger one.",
+  },
+  create_customer_username_taken: {
+    no: "Brukernavnet er opptatt.",
+    en: "Username is already taken.",
+  },
+  create_customer_failed: {
+    no: "Kunne ikke opprette kunden. Prøv igjen.",
+    en: "Could not create customer. Please try again.",
+  },
+  create_customer_created: { no: "opprettet", en: "created" },
   customer_name: { no: "Kundenavn", en: "Customer name" },
   location: { no: "Sted", en: "Location" },
   language: { no: "Språk", en: "Language" },

@@ -1,3 +1,12 @@
+/** Document navigations should get the HTML fallback; server-fn RPCs must not. */
+export function isDocumentRequest(request: Request) {
+  const dest = request.headers.get("sec-fetch-dest");
+  if (dest === "document" || dest === "iframe" || dest === "frame") return true;
+  if (dest) return false;
+  const accept = request.headers.get("accept") ?? "";
+  return accept.includes("text/html") && !accept.includes("application/json");
+}
+
 export function renderErrorPage(): string {
   return `<!doctype html>
 <html lang="en">

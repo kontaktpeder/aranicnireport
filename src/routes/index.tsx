@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
-import { loginIdentifierToEmail } from "@/lib/username";
+import { identifierToEmailCandidates } from "@/lib/username";
 import { LanguageToggle, Wordmark } from "@/components/brand";
 import { PrimaryButton, TextField } from "@/components/field";
 
@@ -58,11 +59,18 @@ function LoginPage() {
       return;
     }
     setBusy(true);
-    const { data, error: signInError } = await supabase.auth.signInWithPassword({
-      email: loginIdentifierToEmail(username),
-      password,
-    });
-    if (signInError || !data.session) {
+    let session: Session | null = null;
+    for (const email of identifierToEmailCandidates(username)) {
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (!signInError && data.session) {
+        session = data.session;
+        break;
+      }
+    }
+    if (!session) {
       setBusy(false);
       setError(t("login_failed"));
       return;
@@ -70,7 +78,7 @@ function LoginPage() {
     const { data: roles } = await supabase
       .from("user_roles")
       .select("role")
-      .eq("user_id", data.session.user.id);
+      .eq("user_id", session.user.id);
     const isAdmin = (roles ?? []).some((r) => r.role === "admin");
     void navigate({ to: isAdmin ? "/admin" : "/report", replace: true });
   }

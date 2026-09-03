@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
 import { adminExists, bootstrapFirstAdmin } from "@/lib/admin.functions";
+import { errorMessage } from "@/lib/utils";
 import { Wordmark } from "@/components/brand";
 import { PrimaryButton, TextField } from "@/components/field";
 
@@ -50,7 +51,7 @@ function SetupPage() {
       await refetch();
       void navigate({ to: "/", replace: true });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not create administrator");
+      toast.error(errorMessage(error, "Could not create administrator"));
     } finally {
       setBusy(false);
     }

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
 import { formatDate } from "@/lib/sign-out";
+import { errorMessage } from "@/lib/utils";
 import { resetCustomerPassword } from "@/lib/admin.functions";
 import { PrimaryButton, TextField } from "@/components/field";
 
@@ -301,7 +302,7 @@ function AccountTab({
       toast.success(t("reset_password"));
       setPassword("");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not change password");
+      toast.error(errorMessage(error, "Could not change password"));
     } finally {
       setBusy(false);
     }
