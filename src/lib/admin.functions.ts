@@ -29,6 +29,11 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const username = normalizeUsername(data.username);
+    const email = usernameToEmail(username);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error("Invalid username: use letters, numbers, dot or dash — or a full email address.");
+    }
+
 
     const { data: customer, error: customerError } = await supabaseAdmin
       .from("customers")
