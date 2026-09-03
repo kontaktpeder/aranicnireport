@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { statusToken, useAdminOverview } from "@/lib/admin-data";
 import { createCustomerAccount } from "@/lib/admin.functions";
+import { isValidUsername } from "@/lib/username";
+import { errorMessage } from "@/lib/utils";
 import { PrimaryButton, TextField } from "@/components/field";
 
 export const Route = createFileRoute("/_authenticated/admin/customers/")({
@@ -23,8 +25,9 @@ export const Route = createFileRoute("/_authenticated/admin/customers/")({
 
 function AdminCustomers() {
   const { t } = useI18n();
-  const { data } = useAdminOverview();
+  const { data, error: loadError } = useAdminOverview();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const create = useServerFn(createCustomerAccount);
 
   const [open, setOpen] = useState(false);
@@ -35,25 +38,36 @@ function AdminCustomers() {
   const [language, setLanguage] = useState<"no" | "en">("no");
   const [busy, setBusy] = useState(false);
 
-  async function submit() {
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
     if (!name.trim() || username.trim().length < 3 || password.length < 6) {
-      toast.error("Name, username (min 3) and password (min 6) are required.");
+      toast.error(t("create_customer_missing"));
+      return;
+    }
+    if (!isValidUsername(username)) {
+      toast.error(t("create_customer_username"));
       return;
     }
     setBusy(true);
     try {
-      await create({
+      const created = await create({
         data: { name, location, username, password, language, active: true },
       });
-      toast.success(`${name} created`);
+      toast.success(`${name.trim()} ${t("create_customer_created")}`);
       setOpen(false);
       setName("");
       setLocation("");
       setUsername("");
       setPassword("");
       await queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
+      if (created?.customerId) {
+        void navigate({
+          to: "/admin/customers/$customerId",
+          params: { customerId: created.customerId },
+        });
+      }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not create customer");
+      toast.error(errorMessage(error, t("create_customer_failed")));
     } finally {
       setBusy(false);
     }
@@ -64,6 +78,7 @@ function AdminCustomers() {
       <div className="flex items-center justify-between pt-8">
         <h1 className="text-3xl font-semibold">{t("customers")}</h1>
         <button
+          type="button"
           onClick={() => setOpen((value) => !value)}
           className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
         >
@@ -73,11 +88,16 @@ function AdminCustomers() {
       </div>
 
       {open ? (
-        <div className="surface-card mt-5 space-y-4 p-5">
+        <form className="surface-card mt-5 space-y-4 p-5" onSubmit={submit}>
           <TextField label={t("customer_name")} value={name} onChange={setName} />
           <TextField label={t("location")} value={location} onChange={setLocation} />
           <TextField label={t("username")} value={username} onChange={setUsername} />
-          <TextField label={t("password")} value={password} onChange={setPassword} />
+          <TextField
+            label={t("password")}
+            value={password}
+            onChange={setPassword}
+            type="password"
+          />
           <div>
             <span className="eyebrow mb-2 block">{t("language")}</span>
             <div className="flex gap-2">
@@ -97,14 +117,18 @@ function AdminCustomers() {
               ))}
             </div>
           </div>
-          <PrimaryButton onClick={submit} disabled={busy}>
+          <PrimaryButton type="submit" disabled={busy}>
             {busy ? "…" : t("create")}
           </PrimaryButton>
-        </div>
+        </form>
       ) : null}
 
       <div className="mt-6 space-y-3">
-        {(data?.rows ?? []).length === 0 ? (
+        {loadError ? (
+          <p className="text-sm text-destructive">
+            {errorMessage(loadError, t("create_customer_failed"))}
+          </p>
+        ) : (data?.rows ?? []).length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("no_customers")}</p>
         ) : (
           data?.rows.map((row) => (

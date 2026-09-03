@@ -106,6 +106,19 @@ const dict = {
   overview: { no: "Oversikt", en: "Overview" },
   account: { no: "Konto", en: "Account" },
   new_customer: { no: "Ny kunde", en: "New customer" },
+  create_customer_missing: {
+    no: "Kundenavn, brukernavn (minst 3 tegn) og passord (minst 6 tegn) er påkrevd.",
+    en: "Name, username (min 3) and password (min 6) are required.",
+  },
+  create_customer_username: {
+    no: "Brukernavn kan bare inneholde bokstaver, tall, punktum, bindestrek og understrek.",
+    en: "Username can only contain letters, numbers, dots, hyphens and underscores.",
+  },
+  create_customer_failed: {
+    no: "Kunne ikke opprette kunden. Prøv igjen.",
+    en: "Could not create customer. Please try again.",
+  },
+  create_customer_created: { no: "opprettet", en: "created" },
   customer_name: { no: "Kundenavn", en: "Customer name" },
   location: { no: "Sted", en: "Location" },
   language: { no: "Språk", en: "Language" },

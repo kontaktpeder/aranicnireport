@@ -2,8 +2,15 @@
 // synthetic email address derived from that username.
 export const USERNAME_EMAIL_DOMAIN = "customers.goldofsicily.no";
 
+/** Letters, numbers, dot, underscore and hyphen — safe as an email local-part. */
+export const USERNAME_PATTERN = /^[a-z0-9._-]{3,}$/;
+
 export function normalizeUsername(username: string) {
   return username.trim().toLowerCase();
+}
+
+export function isValidUsername(username: string) {
+  return USERNAME_PATTERN.test(normalizeUsername(username));
 }
 
 export function usernameToEmail(username: string) {

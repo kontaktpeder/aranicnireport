@@ -1,34 +1,51 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { usernameToEmail, normalizeUsername } from "@/lib/username";
+import { usernameToEmail, normalizeUsername, USERNAME_PATTERN } from "@/lib/username";
 
 const createSchema = z.object({
-  name: z.string().min(1),
-  location: z.string().optional().default(""),
-  username: z.string().min(3),
+  name: z.string().trim().min(1),
+  location: z.string().trim().optional().default(""),
+  username: z
+    .string()
+    .trim()
+    .min(3)
+    .transform(normalizeUsername)
+    .refine((value) => USERNAME_PATTERN.test(value), {
+      message: "Username can only contain letters, numbers, dots, hyphens and underscores (min 3).",
+    }),
   password: z.string().min(6),
   language: z.enum(["no", "en"]).default("no"),
   active: z.boolean().default(true),
 });
 
 async function assertAdmin(supabase: {
-  rpc: (fn: "is_admin") => Promise<{ data: unknown; error: unknown }>;
+  rpc: (fn: "is_admin") => Promise<{ data: unknown; error: { message: string } | null }>;
 }) {
   const { data, error } = await supabase.rpc("is_admin");
-  if (error || data !== true) {
+  if (error) {
+    throw new Error(`Could not verify admin access: ${error.message}`);
+  }
+  if (data !== true) {
     throw new Error("Not authorized");
   }
 }
 
 export const createCustomerAccount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => createSchema.parse(data))
+  .validator((data: unknown) => createSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertAdmin(context.supabase as never);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const username = normalizeUsername(data.username);
+    const username = data.username;
+
+    const { data: taken } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("username", username)
+      .maybeSingle();
+    if (taken) throw new Error("Username is already taken");
 
     const { data: customer, error: customerError } = await supabaseAdmin
       .from("customers")
@@ -40,43 +57,57 @@ export const createCustomerAccount = createServerFn({ method: "POST" })
       })
       .select("id")
       .single();
-    if (customerError || !customer) throw new Error(customerError?.message ?? "Could not create customer");
+    if (customerError || !customer)
+      throw new Error(customerError?.message ?? "Could not create customer");
 
-    const { data: created, error: userError } = await supabaseAdmin.auth.admin.createUser({
-      email: usernameToEmail(username),
-      password: data.password,
-      email_confirm: true,
-      user_metadata: { username },
-    });
-    if (userError || !created.user) {
+    let userId: string | undefined;
+    try {
+      const { data: created, error: userError } = await supabaseAdmin.auth.admin.createUser({
+        email: usernameToEmail(username),
+        password: data.password,
+        email_confirm: true,
+        user_metadata: {
+          username,
+          customer_id: customer.id,
+          language: data.language,
+        },
+      });
+      if (userError || !created?.user) {
+        throw new Error(userError?.message ?? "Could not create login");
+      }
+      userId = created.user.id;
+
+      const { error: profileError } = await supabaseAdmin.from("profiles").upsert(
+        {
+          id: userId,
+          username,
+          customer_id: customer.id,
+          preferred_language: data.language,
+        },
+        { onConflict: "id" },
+      );
+      if (profileError) throw new Error(profileError.message);
+
+      const { error: roleError } = await supabaseAdmin
+        .from("user_roles")
+        .insert({ user_id: userId, role: "customer" });
+      if (roleError && roleError.code !== "23505") {
+        throw new Error(roleError.message);
+      }
+
+      return { customerId: customer.id, userId };
+    } catch (error) {
+      if (userId) {
+        await supabaseAdmin.auth.admin.deleteUser(userId);
+      }
       await supabaseAdmin.from("customers").delete().eq("id", customer.id);
-      throw new Error(userError?.message ?? "Could not create login");
+      throw error instanceof Error ? error : new Error("Could not create customer");
     }
-
-    const userId = created.user.id;
-    const { error: profileError } = await supabaseAdmin.from("profiles").insert({
-      id: userId,
-      username,
-      customer_id: customer.id,
-      preferred_language: data.language,
-    });
-    if (profileError) {
-      await supabaseAdmin.auth.admin.deleteUser(userId);
-      await supabaseAdmin.from("customers").delete().eq("id", customer.id);
-      throw new Error(profileError.message);
-    }
-
-    const { error: roleError } = await supabaseAdmin
-      .from("user_roles")
-      .insert({ user_id: userId, role: "customer" });
-    if (roleError) throw new Error(roleError.message);
-
-    return { customerId: customer.id, userId };
   });
 
 export const resetCustomerPassword = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) =>
+  .validator((data: unknown) =>
     z.object({ userId: z.string().uuid(), password: z.string().min(6) }).parse(data),
   )
   .handler(async ({ data, context }) => {
@@ -94,7 +125,7 @@ export const resetCustomerPassword = createServerFn({ method: "POST" })
  * an admin exists, so it can never be used as a public signup.
  */
 export const bootstrapFirstAdmin = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) =>
+  .validator((data: unknown) =>
     z.object({ username: z.string().min(3), password: z.string().min(6) }).parse(data),
   )
   .handler(async ({ data }) => {
@@ -113,9 +144,16 @@ export const bootstrapFirstAdmin = createServerFn({ method: "POST" })
       email_confirm: true,
       user_metadata: { username },
     });
-    if (userError || !created.user) throw new Error(userError?.message ?? "Could not create admin");
+    if (userError || !created?.user)
+      throw new Error(userError?.message ?? "Could not create admin");
 
-    await supabaseAdmin.from("profiles").insert({ id: created.user.id, username });
+    const { error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .upsert({ id: created.user.id, username }, { onConflict: "id" });
+    if (profileError) {
+      await supabaseAdmin.auth.admin.deleteUser(created.user.id);
+      throw new Error(profileError.message);
+    }
     const { error: roleError } = await supabaseAdmin
       .from("user_roles")
       .insert({ user_id: created.user.id, role: "admin" });

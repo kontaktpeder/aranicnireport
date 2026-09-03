@@ -45,6 +45,8 @@ export function useAdminOverview() {
           .limit(1000),
       ]);
 
+      if (customersRes.error) throw customersRes.error;
+
       const customers = customersRes.data ?? [];
       const reports = reportsRes.data ?? [];
       const deliveries = deliveriesRes.data ?? [];
